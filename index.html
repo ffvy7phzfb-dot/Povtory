@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Детектор повторов</title>
+<style>
+  :root[data-theme="light"]{
+    --bg:#f7f8fa;--panel-bg:#fff;--text:#1a1a1a;--text-muted:#6b7280;
+    --border:#e5e7eb;--accent:#2563eb;--accent-hover:#1d4ed8;
+    --popup-bg:#fff;--shadow:0 8px 24px rgba(0,0,0,.12);
+    --syn-bg:#eff6ff;--syn-border:#bfdbfe;--syn-hover:#dbeafe;
+    --link-bg:#ecfdf5;--link-border:#6ee7b7;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f172a;--panel-bg:#1e293b;--text:#e2e8f0;--text-muted:#94a3b8;
+    --border:#334155;--accent:#3b82f6;--accent-hover:#60a5fa;
+    --popup-bg:#1e293b;--shadow:0 8px 24px rgba(0,0,0,.5);
+    --syn-bg:#1e3a5f;--syn-border:#1e40af;--syn-hover:#1e40af;
+    --link-bg:#064e3b;--link-border:#10b981;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,sans-serif}
+  header{display:flex;justify-content:space-between;align-items:center;
+    padding:12px 16px;background:var(--panel-bg);border-bottom:1px solid var(--border);
+    position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:8px}
+  header h1{font-size:16px;margin:0;font-weight:600}
+  .controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .btn{padding:8px 12px;font-size:13px;border-radius:8px;cursor:pointer;
+    border:1px solid var(--border);background:var(--panel-bg);color:var(--text);
+    font-family:inherit}
+  .btn:hover{border-color:var(--accent)}
+  .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .btn-danger:hover{border-color:#ef4444;color:#ef4444}
+  .theme-toggle{width:40px;height:40px;padding:0;border-radius:50%;font-size:18px}
+  .slider-wrap{display:flex;align-items:center;gap:8px;padding:6px 12px;
+    background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px}
+  .slider-wrap input[type=range]{width:100px;accent-color:var(--accent)}
+  .slider-val{font-weight:600;color:var(--accent)}
+  .workspace{display:grid;grid-template-columns:1fr 360px;gap:16px;
+    padding:16px;max-width:1500px;margin:0 auto}
+  @media (max-width:900px){.workspace{grid-template-columns:1fr;padding:12px;gap:12px}}
+  .editor-pane{display:flex;flex-direction:column;gap:10px}
+  textarea{width:100%;min-height:140px;padding:12px;font-size:15px;line-height:1.6;
+    border:1px solid var(--border);border-radius:12px;background:var(--panel-bg);
+    color:var(--text);resize:vertical;font-family:inherit;outline:none}
+  textarea:focus{border-color:var(--accent)}
+  .preview{padding:14px;font-size:16px;line-height:2;
+    border:1px solid var(--border);border-radius:12px;background:var(--panel-bg);
+    min-height:150px;word-wrap:break-word}
+  .repeat{border-radius:3px;padding:1px 4px;cursor:pointer;
+    border-bottom:2px solid transparent;font-weight:500}
+  .side-pane{background:var(--panel-bg);border:1px solid var(--border);
+    border-radius:12px;padding:14px;display:flex;flex-direction:column;
+    max-height:80vh;overflow-y:auto}
+  @media (max-width:900px){.side-pane{max-height:none}}
+  .side-pane h2{font-size:13px;font-weight:600;margin:0 0 10px;text-transform:uppercase;
+    letter-spacing:.5px;color:var(--text-muted)}
+  .empty-state{color:var(--text-muted);font-size:14px;text-align:center;
+    padding:30px 16px;line-height:1.6}
+  .repeat-card{border:1px solid var(--border);border-left-width:6px;
+    border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer}
+  .repeat-card .card-head{font-weight:600;font-size:14px;margin-bottom:6px;
+    display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+  .repeat-card .card-type{font-size:10px;padding:2px 6px;border-radius:4px;
+    background:var(--bg);color:var(--text-muted)}
+  .repeat-card .occurrence{font-size:13px;color:var(--text-muted);margin:4px 0;
+    line-height:1.4;word-wrap:break-word}
+  .repeat-card mark{background:transparent;color:var(--text);font-weight:600}
+  .links-section{margin-top:18px;border-top:1px dashed var(--border);padding-top:12px}
+  .links-section h3{font-size:12px;font-weight:600;margin:0 0 8px;
+    text-transform:uppercase;color:var(--text-muted);
+    display:flex;justify-content:space-between;align-items:center}
+  .link-item{display:flex;justify-content:space-between;gap:6px;
+    padding:6px 8px;margin-bottom:4px;background:var(--link-bg);
+    border:1px solid var(--link-border);border-radius:6px;font-size:13px}
+  .link-item .link-del{cursor:pointer;color:var(--text-muted);padding:0 4px}
+  .link-item .link-del:hover{color:#ef4444}
+  #synonym-popup{position:fixed;display:none;background:var(--popup-bg);
+    border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);
+    padding:12px;min-width:240px;max-width:calc(100vw - 24px);z-index:1000}
+  #synonym-popup h4{margin:0 0 8px;font-size:13px;color:var(--text-muted);font-weight:500}
+  #synonym-popup .syn-list{display:flex;flex-wrap:wrap;gap:6px}
+  #synonym-popup .syn-item{padding:6px 10px;background:var(--syn-bg);
+    border:1px solid var(--syn-border);border-radius:6px;cursor:pointer;
+    font-size:14px;color:var(--text)}
+  #synonym-popup .syn-item:hover{background:var(--syn-hover)}
+  #synonym-popup .syn-add{border-style:dashed;opacity:.7}
+  #synonym-popup .popup-actions{margin-top:10px;padding-top:10px;
+    border-top:1px dashed var(--border)}
+  .stats{font-size:12px;color:var(--text-muted);margin-left:8px}
+  .dict-status{font-size:11px;color:var(--text-muted);margin-left:8px}
+  #toast{position:fixed;bottom:20px;left:50%;
+    transform:translateX(-50%) translateY(100px);
+    background:var(--accent);color:#fff;padding:10px 18px;border-radius:8px;
+    font-size:14px;opacity:0;transition:all .3s;z-index:2000;pointer-events:none}
+  #toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+  #link-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);
+    display:none;align-items:center;justify-content:center;z-index:3000}
+  #link-modal.show{display:flex}
+  #link-modal .modal-box{background:var(--popup-bg);border:1px solid var(--border);
+    border-radius:12px;padding:18px;width:min(90vw,360px);box-shadow:var(--shadow)}
+  #link-modal h3{margin:0 0 10px;font-size:15px}
+  #link-modal p{margin:0 0 10px;font-size:13px;color:var(--text-muted);line-height:1.4}
+  #link-modal input{width:100%;padding:10px 12px;font-size:14px;
+    border:1px solid var(--border);border-radius:8px;background:var(--bg);
+    color:var(--text);outline:none;font-family:inherit}
+  #link-modal .modal-actions{display:flex;gap:8px;margin-top:12px;justify-content:flex-end}
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;flex-wrap:wrap;gap:6px">
+    <h1>🔍 Детектор повторов</h1>
+    <span class="stats" id="stats"></span>
+    <span class="dict-status" id="dict-status"></span>
+  </div>
+  <div class="controls">
+    <div class="slider-wrap">
+      <label>Через</label>
+      <input type="range" id="distance" min="1" max="15" value="4">
+      <span class="slider-val" id="distance-val">4</span>
+      <label>слов</label>
+    </div>
+    <button class="btn btn-primary" id="btn-check" type="button">Проверить</button>
+    <button class="btn" id="btn-copy" type="button">📋</button>
+    <button class="btn btn-danger" id="btn-clear" type="button">🗑</button>
+    <button class="btn theme-toggle" id="btn-theme" type="button">🌙</button>
+  </div>
+</header>
+
+<div class="workspace">
+  <div class="editor-pane">
+    <textarea id="input" placeholder="Вставь текст…">Работники на заводе работали. Работники на заводе работали.
+
+Кот спал на окне. Кошка смотрела на улицу. Мышка пробежала мимо. Мышь спряталась в норке.</textarea>
+    <div class="preview" id="preview"></div>
+  </div>
+  <aside class="side-pane">
+    <h2>Найдено повторов</h2>
+    <div id="repeats-list"></div>
+    <div class="links-section">
+      <h3>
+        <span>🔗 Мои связи</span>
+        <span class="link-count" id="link-count">0</span>
+      </h3>
+      <div id="links-list"></div>
+    </div>
+  </aside>
+</div>
+
+<div id="synonym-popup">
+  <h4 id="popup-word"></h4>
+  <div class="syn-list" id="popup-list"></div>
+  <div class="popup-actions">
+    <button class="btn" id="btn-link-word" type="button">🔗 Связать со словом</button>
+  </div>
+</div>
+
+<div id="link-modal">
+  <div class="modal-box">
+    <h3>🔗 Связать как однокоренные</h3>
+    <p>Введите второе слово. Оно будет считаться повтором для <b id="link-source-word"></b>.</p>
+    <input type="text" id="link-target-input" placeholder="например: кошка" autocomplete="off">
+    <div class="modal-actions">
+      <button class="btn" id="btn-link-cancel" type="button">Отмена</button>
+      <button class="btn btn-primary" id="btn-link-save" type="button">Связать</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const GIST_URL = 'https://gist.githubusercontent.com/ffvy7phzfb-dot/c84bb6db40e763e11dd4e075c428b439/raw/f4e5af1f3872d4373643aaa0aba0925854a68f14/dictionary.json';
+
+function simpleRussianStem(word){
+  let w = word.toLowerCase().replace(/ё/g,'е');
+  if (w.length <= 4) return w;
+  const derivational = ['ированн','ирован','изаци','изац','ованн','ствова','ество','еств','ость','еск','ник','ниц','чик','щик','ств','тель','арь','ист','изм','аци','ени','анн','енн','онн','ущ','ющ','ащ','ящ','лив','чив','ив','ова','ева','ирова'];
+  for (const suf of derivational){ if (w.endsWith(suf) && w.length - suf.length >= 3){ w = w.slice(0, -suf.length); break; } }
+  const endings = ['иями','иях','иям','ией','аться','яться','иться','еться','ываться','иваться','уется','ается','яется','ится','ется','ать','ять','ить','еть','уть','ыть','ает','яет','ует','ают','яют','уют','ала','яла','ила','ела','ула','ыла','али','яли','или','ели','ули','ыли','ал','ял','ил','ел','ул','ыл','аю','яю','ую','юю','ай','яй','уй','ой','ей','ая','яя','ое','ее','ые','ие','ый','ий','ым','им','ем','ом','ам','ям','ах','ях','ов','ев','ую','юю','ия','ие','ии','ями','ами','у','ю','а','я','о','е','ы','и','й','ь'];
+  for (const end of endings){ if (w.length - end.length >= 3 && w.endsWith(end)){ return w.slice(0, -end.length); } }
+  return w;
+}
+
+(function(){
+'use strict';
+const $ = id => document.getElementById(id);
+const input = $('input'), preview = $('preview'), repeatsList = $('repeats-list');
+const statsEl = $('stats'), dictStatus = $('dict-status');
+const popup = $('synonym-popup'), popupWord = $('popup-word'), popupList = $('popup-list');
+const toastEl = $('toast'), themeBtn = $('btn-theme');
+const distanceEl = $('distance'), distanceVal = $('distance-val');
+const linkModal = $('link-modal'), linkSourceWord = $('link-source-word');
+const linkTargetInput = $('link-target-input');
+
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme', t);
+  themeBtn.textContent = t === 'light' ? '🌙' : '☀️';
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'light' ? 'dark' : 'light';
+  applyTheme(next);
+  try { localStorage.setItem('theme', next); } catch(e){}
+  safeAnalyze();
+}
+let savedTheme = 'light';
+try { savedTheme = localStorage.getItem('theme') || 'light'; } catch(e){}
+applyTheme(savedTheme);
+
+const COLORS_LIGHT = [
+  {bg:'#fde68a',border:'#f59e0b'},{bg:'#bbf7d0',border:'#22c55e'},
+  {bg:'#bfdbfe',border:'#3b82f6'},{bg:'#fecaca',border:'#ef4444'},
+  {bg:'#e9d5ff',border:'#a855f7'},{bg:'#fed7aa',border:'#f97316'},
+  {bg:'#a5f3fc',border:'#06b6d4'},{bg:'#fbcfe8',border:'#ec4899'}
+];
+const COLORS_DARK = [
+  {bg:'#78350f',border:'#f59e0b'},{bg:'#14532d',border:'#22c55e'},
+  {bg:'#1e3a8a',border:'#3b82f6'},{bg:'#7f1d1d',border:'#ef4444'},
+  {bg:'#4c1d95',border:'#a855f7'},{bg:'#7c2d12',border:'#f97316'},
+  {bg:'#164e63',border:'#06b6d4'},{bg:'#831843',border:'#ec4899'}
+];
+function getPairColor(i){
+  const t = document.documentElement.getAttribute('data-theme');
+  const p = t === 'dark' ? COLORS_DARK : COLORS_LIGHT;
+  return p[i % p.length];
+}
+
+const STOP_WORDS = new Set(['и','в','во','не','что','он','на','я','с','со','как','а','то','все','она','так','его','но','да','ты','к','у','же','вы','за','бы','по','только','ее','мне','было','вот','от','меня','еще','нет','о','из','ему','теперь','когда','даже','ну','вдруг','ли','если','уже','или','ни','быть','был','него','до','вас','нибудь','опять','уж','вам','ведь','там','потом','себя','ничего','ей','может','они','тут','где','есть','надо','ней','для','мы','тебя','их','чем','была','сам','чтоб','без','будто','чего','раз','тоже','себе','под','будет','ж','тогда','кто','этот','того','потому','этого','какой','совсем','ним','здесь','этом','один','почти','мой','тем','чтобы','нее','сейчас','были','куда','зачем','всех','никогда','можно','при','наконец','два','об','другой','хоть','после','над','больше','тот','через','эти','нас','про','всего','них','какая','много','разве','три','эту','моя','впрочем','хорошо','свою','этой','перед','иногда','лучше','чуть','том','нельзя','такой','им','более','всегда','конечно','всю','между']);
+
+function isHeadingLine(line){
+  const t = line.trim();
+  if (/^#{1,6}\s/.test(t)) return true;
+  if (/^\*{1,2}[^*].*\*{1,2}$/.test(t)) return true;
+  return false;
+}
+
+function tokenize(text){
+  const tokens = [];
+  const lines = text.split('\n');
+  lines.forEach((line, i) => {
+    if (i > 0) tokens.push({type:'punct', text:'\n'});
+    const isHead = isHeadingLine(line);
+    const parts = line.split(/([а-яёa-z]+)/i);
+    for (const p of parts){
+      if (!p) continue;
+      if (/^[а-яёa-z]+$/i.test(p)) tokens.push({type:'word', text:p, stem:simpleRussianStem(p), isHeading:isHead});
+      else tokens.push({type:'punct', text:p});
+    }
+  });
+  return tokens;
+}
+
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeAttr(s){return escapeHtml(s);}
+
+let toastTimer = null;
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>toastEl.classList.remove('show'), 2000);
+}
+
+let currentTokens = [];
+let currentPairs = [];
+
+let DICTIONARY = {};
+
+async function loadDictionaryFromGist(){
+  try {
+    const res = await fetch(GIST_URL, {cache:'no-cache'});
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    DICTIONARY = data;
+    dictStatus.textContent = '📖 словарь: ' + Object.keys(data).length + ' гнёзд';
+    buildCanonicalMap();
+    safeAnalyze();
+  } catch(e){
+    dictStatus.textContent = '📖 словарь не загрузился';
+    console.warn('Ошибка словаря:', e.message);
+    buildCanonicalMap();
+  }
+}
+
+let canonicalMap = new Map();
+function buildCanonicalMap(){
+  canonicalMap = new Map();
+  for (const [head, words] of Object.entries(DICTIONARY)){
+    const canon = head.toLowerCase();
+    canonicalMap.set(canon, canon);
+    for (const w of words){
+      const wl = w.toLowerCase();
+      if (!canonicalMap.has(wl)) canonicalMap.set(wl, canon);
+    }
+  }
+}
+function canonicalize(word){
+  const w = word.toLowerCase();
+  return canonicalMap.get(w) || w;
+}
+
+function safeAnalyze(){
+  try { analyze(); }
+  catch(e){ console.error('Ошибка:', e); statsEl.textContent = '⚠️ ' + e.message; }
+}
+
+function analyze(){
+  const text = input.value;
+  hidePopup();
+  if (!text.trim()){
+    preview.innerHTML = '';
+    repeatsList.innerHTML = '<div class="empty-state">Введите текст.</div>';
+    statsEl.textContent = ''; currentPairs = []; currentTokens = []; return;
+  }
+  const distance = parseInt(distanceEl.value, 10) || 4;
+  const tokens = tokenize(text);
+  currentTokens = tokens;
+
+  const sentences = [];
+  let cur = {tokenIdxs:[], stemMap:new Map()};
+  tokens.forEach((t, idx) => {
+    if (t.type === 'punct' && /[.!?…]/.test(t.text)){
+      if (cur.tokenIdxs.length > 0) sentences.push(cur);
+      cur = {tokenIdxs:[], stemMap:new Map()}; return;
+    }
+    if (t.type === 'punct' && t.text === '\n'){
+      if (cur.tokenIdxs.length > 0) sentences.push(cur);
+      cur = {tokenIdxs:[], stemMap:new Map()}; return;
+    }
+    if (t.type === 'word'){
+      cur.tokenIdxs.push(idx);
+      if (t.text.length >= 3 && !STOP_WORDS.has(t.text.toLowerCase()) && !t.isHeading){
+        const wl = t.text.toLowerCase();
+        const canon = canonicalize(wl);
+        const key = (canon !== wl) ? 'canon:' + canon : 'stem:' + t.stem;
+        if (!cur.stemMap.has(key)) cur.stemMap.set(key, []);
+        cur.stemMap.get(key).push(idx);
+      }
+    }
+  });
+  if (cur.tokenIdxs.length > 0) sentences.push(cur);
+
+  const pairsFound = [];
+  let colorIdx = 0;
+  const usedTokenIdxs = new Set();
+
+  for (const sent of sentences){
+    for (const [key, idxs] of sent.stemMap){
+      if (idxs.length < 2) continue;
+      const closeIdxs = filterByDistance(tokens, idxs, distance);
+      if (closeIdxs.length >= 2){
+        pairsFound.push({
+          stem: key.replace(/^(canon|stem):/, ''),
+          colorIndex: colorIdx++,
+          occurrences: closeIdxs.map(i => ({tokenIdx:i, word:tokens[i].text}))
+        });
+        closeIdxs.forEach(i => usedTokenIdxs.add(i));
+      }
+    }
+  }
+  const softDistance = distance * 2;
+  for (let s = 0; s < sentences.length - 1; s++){
+    const a = sentences[s], b = sentences[s+1];
+    const allKeys = new Set([...a.stemMap.keys(), ...b.stemMap.keys()]);
+    for (const key of allKeys){
+      const idxsA = a.stemMap.get(key) || [];
+      const idxsB = b.stemMap.get(key) || [];
+      const allIdxs = [...idxsA, ...idxsB].sort((x,y)=>x-y);
+      if (allIdxs.length < 2) continue;
+      const closeIdxs = filterByDistance(tokens, allIdxs, softDistance);
+      if (closeIdxs.length >= 2){
+        const fresh = closeIdxs.filter(i => !usedTokenIdxs.has(i));
+        if (fresh.length === 0) continue;
+        pairsFound.push({
+          stem: key.replace(/^(canon|stem):/, ''),
+          colorIndex: colorIdx++,
+          occurrences: closeIdxs.map(i => ({tokenIdx:i, word:tokens[i].text}))
+        });
+        closeIdxs.forEach(i => usedTokenIdxs.add(i));
+      }
+    }
+  }
+
+  currentPairs = pairsFound;
+  const tokenToColor = new Map();
+  pairsFound.forEach(p => p.occurrences.forEach(o => tokenToColor.set(o.tokenIdx, p.colorIndex)));
+  renderPreview(tokens, tokenToColor);
+  renderRepeatsList(pairsFound, tokens);
+  statsEl.textContent = pairsFound.length === 0 ? '✅ повторов нет' : 'пар: ' + pairsFound.length;
+}
+
+function countWordsBetween(tokens, a, b){
+  if (a > b) [a,b] = [b,a];
+  let c = 0;
+  for (let i = a+1; i < b; i++) if (tokens[i].type === 'word') c++;
+  return c;
+}
+function filterByDistance(tokens, idxs, distance){
+  if (idxs.length < 2) return idxs;
+  const keep = new Set();
+  for (let i = 0; i < idxs.length; i++){
+    for (let j = i+1; j < idxs.length; j++){
+      if (countWordsBetween(tokens, idxs[i], idxs[j]) <= distance){
+        keep.add(idxs[i]); keep.add(idxs[j]);
+      }
+    }
+  }
+  return [...keep].sort((a,b)=>a-b);
+}
+
+function renderPreview(tokens, tokenToColor){
+  let html = '';
+  for (let i = 0; i < tokens.length; i++){
+    const t = tokens[i];
+    if (t.type === 'punct'){ html += t.text === '\n' ? '<br>' : escapeHtml(t.text); continue; }
+    const ci = tokenToColor.get(i);
+    if (ci !== undefined){
+      const c = getPairColor(ci);
+      html += `<span class="repeat" style="background:${c.bg};border-bottom-color:${c.border}" data-token-idx="${i}" data-word="${escapeAttr(t.text)}" data-stem="${escapeAttr(t.stem)}">${escapeHtml(t.text)}</span>`;
+    } else html += escapeHtml(t.text);
+  }
+  preview.innerHTML = html;
+  preview.querySelectorAll('.repeat').forEach(el => el.addEventListener('click', onWordClick));
+}
+
+function renderRepeatsList(pairs, tokens){
+  if (pairs.length === 0){
+    repeatsList.innerHTML = '<div class="empty-state">✅<br><br>Повторов не найдено</div>';
+    return;
+  }
+  repeatsList.innerHTML = pairs.map(pair => {
+    const c = getPairColor(pair.colorIndex);
+    const occ = pair.occurrences.map(o => {
+      const t = tokens[o.tokenIdx];
+      const snip = getContext(tokens, o.tokenIdx);
+      return `<div class="occurrence"><mark style="background:${c.bg}">${escapeHtml(t.text)}</mark> <span style="opacity:.7">… ${escapeHtml(snip)}</span></div>`;
+    }).join('');
+    return `<div class="repeat-card" style="border-left-color:${c.border};background:${c.bg}22" data-token-idx="${pair.occurrences[0].tokenIdx}">
+      <div class="card-head"><span>${escapeHtml(pair.stem)}</span><span class="card-type">${pair.occurrences.length}×</span></div>
+      ${occ}</div>`;
+  }).join('');
+  repeatsList.querySelectorAll('.repeat-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const ti = parseInt(card.dataset.tokenIdx, 10);
+      const target = preview.querySelector(`.repeat[data-token-idx="${ti}"]`);
+      if (target){
+        target.scrollIntoView({behavior:'smooth', block:'center'});
+        const prev = target.style.outline;
+        target.style.outline = '3px solid var(--accent)';
+        setTimeout(() => target.style.outline = prev, 1000);
+      }
+    });
+  });
+}
+
+function getContext(tokens, tokenIdx){
+  let left = '', right = '';
+  let li = tokenIdx - 1, lc = 0;
+  while (li >= 0 && lc < 3){ if (tokens[li].type === 'word') lc++; left = tokens[li].text + left; li--; }
+  let ri = tokenIdx + 1, rc = 0;
+  while (ri < tokens.length && rc < 3){ if (tokens[ri].type === 'word') rc++; right += tokens[ri].text; ri++; }
+  return left.trim() + '…' + right.trim();
+}
+
+/* ============ КЛИК ПО СЛОВУ ============ */
+let currentPopupWord = null;
+let currentPopupStem = null;
+let currentPopupTokenIdx = null;
+
+function onWordClick(e){
+  e.stopPropagation();
+  const el = e.currentTarget;
+  currentPopupWord = el.dataset.word;
+  currentPopupStem = el.dataset.stem;
+  currentPopupTokenIdx = parseInt(el.dataset.tokenIdx, 10);
+
+  popupWord.textContent = '«' + currentPopupWord + '»';
+  popupList.innerHTML = '<div class="loading" style="color:var(--text-muted);font-size:13px">Кликни «Связать со словом» — введи однокоренное вручную.</div>';
+
+  const rect = el.getBoundingClientRect();
+  popup.style.display = 'block';
+  const popupW = 280;
+  const left = Math.max(12, Math.min(rect.left, window.innerWidth - popupW - 12));
+  popup.style.top = (rect.bottom + 8) + 'px';
+  popup.style.left = left + 'px';
+}
+
+function hidePopup(){ popup.style.display = 'none'; }
+document.addEventListener('click', (e) => {
+  if (!popup.contains(e.target) && !e.target.classList.contains('repeat')) hidePopup();
+});
+
+/* ============ СВЯЗКИ (localStorage) ============ */
+function loadUserLinks(){
+  try { const r = localStorage.getItem('userLinks'); return r ? JSON.parse(r) : {}; }
+  catch(e){ return {}; }
+}
+function saveUserLinks(links){
+  try { localStorage.setItem('userLinks', JSON.stringify(links)); } catch(e){}
+}
+function saveUserLink(a, b){
+  const user = loadUserLinks();
+  a = a.toLowerCase(); b = b.toLowerCase();
+  if (a === b) return;
+  if (!user[a]) user[a] = [];
+  if (!user[a].includes(b)) user[a].push(b);
+  if (!user[b]) user[b] = [];
+  if (!user[b].includes(a)) user[b].push(a);
+  saveUserLinks(user);
+}
+function deleteUserLink(a, b){
+  const user = loadUserLinks();
+  a = a.toLowerCase(); b = b.toLowerCase();
+  if (user[a]) user[a] = user[a].filter(x => x !== b);
+  if (user[b]) user[b] = user[b].filter(x => x !== a);
+  if (user[a] && user[a].length === 0) delete user[a];
+  if (user[b] && user[b].length === 0) delete user[b];
+  saveUserLinks(user);
+}
+function renderLinks(){
+  const links = loadUserLinks();
+  const entries = Object.entries(links);
+  const count = entries.reduce((s, [,v]) => s + v.length, 0) / 2;
+  $('link-count').textContent = Math.round(count);
+  if (entries.length === 0){
+    $('links-list').innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:4px">Пока пусто. Кликни на слово в тексте → «Связать со словом».</div>';
+    return;
+  }
+  $('links-list').innerHTML = entries.map(([a, vals]) => {
+    return vals.map(b => `<div class="link-item">
+      <span class="link-words"><b>${escapeHtml(a)}</b> ↔ ${escapeHtml(b)}</span>
+      <span class="link-del" data-a="${escapeAttr(a)}" data-b="${escapeAttr(b)}" title="Удалить">✕</span>
+    </div>`).join('');
+  }).join('');
+  $('links-list').querySelectorAll('.link-del').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteUserLink(el.dataset.a, el.dataset.b);
+      renderLinks();
+      buildCanonicalMap();
+      safeAnalyze();
+    });
+  });
+}
+
+/* Включаем ручные связи в канонизацию */
+const originalBuildCanonicalMap = buildCanonicalMap;
+buildCanonicalMap = function(){
+  originalBuildCanonicalMap();
+  const user = loadUserLinks();
+  for (const [a, vals] of Object.entries(user)){
+    for (const b of vals){
+      const al = a.toLowerCase(), bl = b.toLowerCase();
+      const existing = canonicalMap.get(al) || al;
+      canonicalMap.set(al, existing);
+      canonicalMap.set(bl, existing);
+    }
+  }
+};
+
+/* ============ МОДАЛКА «СВЯЗАТЬ» ============ */
+function openLinkModal(){
+  if (!currentPopupWord) return;
+  linkSourceWord.textContent = currentPopupWord;
+  linkTargetInput.value = '';
+  linkModal.classList.add('show');
+  setTimeout(() => linkTargetInput.focus(), 100);
+}
+function closeLinkModal(){ linkModal.classList.remove('show'); }
+function saveLinkFromModal(){
+  const target = linkTargetInput.value.trim().toLowerCase();
+  if (!target || target.length < 2){
+    showToast('Введи слово (мин. 2 буквы)');
+    return;
+  }
+  saveUserLink(currentPopupWord, target);
+  closeLinkModal();
+  hidePopup();
+  renderLinks();
+  buildCanonicalMap();
+  safeAnalyze();
+  showToast('✅ Связано: ' + currentPopupWord + ' ↔ ' + target);
+}
+
+/* ============ КНОПКИ ============ */
+function clearAll(){
+  input.value = '';
+  preview.innerHTML = '';
+  repeatsList.innerHTML = '<div class="empty-state">Введите текст.</div>';
+  statsEl.textContent = '';
+  currentPairs = []; currentTokens = [];
+  hidePopup();
+  showToast('Очищено');
+}
+async function copyText(){
+  const text = input.value;
+  if (!text){ showToast('Нечего копировать'); return; }
+  try { await navigator.clipboard.writeText(text); showToast('✅ Скопировано'); }
+  catch(e){
+    try { input.select(); document.execCommand('copy'); window.getSelection().removeAllRanges(); showToast('✅ Скопировано'); }
+    catch(err){ showToast('⚠️ Не удалось'); }
+  }
+}
+
+$('btn-check').addEventListener('click', safeAnalyze);
+$('btn-copy').addEventListener('click', copyText);
+$('btn-clear').addEventListener('click', clearAll);
+themeBtn.addEventListener('click', toggleTheme);
+$('btn-link-word').addEventListener('click', openLinkModal);
+$('btn-link-cancel').addEventListener('click', closeLinkModal);
+$('btn-link-save').addEventListener('click', saveLinkFromModal);
+linkTargetInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') saveLinkFromModal(); });
+linkModal.addEventListener('click', (e) => { if (e.target === linkModal) closeLinkModal(); });
+
+distanceEl.addEventListener('input', () => {
+  distanceVal.textContent = distanceEl.value;
+  safeAnalyze();
+});
+distanceVal.textContent = distanceEl.value;
+
+let inputTimer = null;
+input.addEventListener('input', () => {
+  clearTimeout(inputTimer);
+  inputTimer = setTimeout(safeAnalyze, 300);
+});
+
+renderLinks();
+loadDictionaryFromGist();
+})();
+</script>
+
+</body>
+</html>
